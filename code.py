@@ -13,7 +13,7 @@ BRAND_CODE_TO_BRAND={
     "R":"ram",
     "X":"fiat"
 }
-DATA_API="https://www.jeep.com/bdlws/MDLSDealerLocator?resultsPerPage=3000&func=SALES&brandCode={}&zipCode=63746&radius=10000"
+DATA_API=""
 
 def format_dealer_data(dealer: dict) -> dict:
     return {
