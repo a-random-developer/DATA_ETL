@@ -1,52 +1,62 @@
 import requests
 import json
-from tqdm.notebook import tqdm
 import pandas as pd
+from tqdm.notebook import tqdm
 
-
-BRANDS_TO_PROCESS=["J","C","D","Y","X","R"]
-BRAND_CODE_TO_BRAND={
-    "J":"jeep",
-    "C":"chrysler",
-    "D":"dodge",
-    "Y":"alfa",
-    "R":"ram",
-    "X":"fiat"
+# Brand details
+BRANDS_TO_PROCESS = ["J", "C", "D", "Y", "X", "R"]
+BRAND_CODE_TO_BRAND = {
+    "J": "jeep",
+    "C": "chrysler",
+    "D": "dodge",
+    "Y": "alfa",
+    "R": "ram",
+    "X": "fiat"
 }
-DATA_API=""
 
-def format_dealer_data(dealer: dict) -> dict:
-    return {
-        "dealerCode": dealer.get("dealerCode"),
-        "locationSeq": dealer.get("locationSeq"),
-        "dealerName": dealer.get("dealerName"),
-        "dealerAddress1": dealer.get("dealerAddress1"),
-        "dealerAddress2": dealer.get("dealerAddress2"),
-        "dealerCity": dealer.get("dealerCity"),
-        "dealerState": dealer.get("dealerState"),
-        "dealerShowroomCountry": dealer.get("dealerShowroomCountry"),
-        "dealerZipCode": dealer.get("dealerZipCode"),
-        "dealerShowroomLongitude": dealer.get("dealerShowroomLongitude"),
-        "dealerShowroomLatitude": dealer.get("dealerShowroomLatitude"),
-        "businessCenter": dealer.get("businessCenter"),
-        "phoneNumber": dealer.get("phoneNumber"),
-        "distance": dealer.get("distance"),
-        "dma": dealer.get("dma"),
-        "website": dealer.get("website"),
-        "demail": dealer.get("demail"),
-        "hasQuote": dealer.get("hasQuote"),
-        "departments": str(dealer.get("departments")),
-        "brands": str(dealer.get("brands")),
-        "services": str(dealer.get("services")),
-        "awards": str(dealer.get("awards")),
-        "onlineServiceSchedulingURL": dealer.get("onlineServiceSchedulingURL"),
-        "ossDealerid": dealer.get("ossDealerid"),
-        "osspilotflag": dealer.get("osspilotflag"),
-        "dealerStatus": dealer.get("dealerStatus"),
+
+def safe_str(value):
+    return str(value) if value is not None else None
+
+def format_dealer_data(dealer: dict, brand: str) -> dict:
+    departments = dealer.get("departments", {})
+    departments_filtered = {
+        "sales": departments.get("sales"),
+        "service": departments.get("service")
     }
 
+    return {
+        "brand": brand,
+        "dealerCode": safe_str(dealer.get("dealerCode")),
+        "locationSeq": safe_str(dealer.get("locationSeq")),
+        "dealerName": safe_str(dealer.get("dealerName")),
+        "dealerAddress1": safe_str(dealer.get("dealerAddress1")),
+        "dealerAddress2": safe_str(dealer.get("dealerAddress2")),
+        "dealerCity": safe_str(dealer.get("dealerCity")),
+        "dealerState": safe_str(dealer.get("dealerState")),
+        "dealerShowroomCountry": safe_str(dealer.get("dealerShowroomCountry")),
+        "dealerZipCode": safe_str(dealer.get("dealerZipCode")),
+        "dealerShowroomLongitude": safe_str(dealer.get("dealerShowroomLongitude")),
+        "dealerShowroomLatitude": safe_str(dealer.get("dealerShowroomLatitude")),
+        "businessCenter": safe_str(dealer.get("businessCenter")),
+        "phoneNumber": safe_str(dealer.get("phoneNumber")),
+        "distance": safe_str(dealer.get("distance")),
+        "dma": safe_str(dealer.get("dma")),
+        "website": safe_str(dealer.get("website")),
+        "demail": safe_str(dealer.get("demail")),
+        "hasQuote": safe_str(dealer.get("hasQuote")),
+        "departments": json.dumps(departments_filtered),  # safely store dict as JSON string
+        "brands": safe_str(dealer.get("brands")),
+        "services": safe_str(dealer.get("services")),
+        "awards": safe_str(dealer.get("awards")),
+        "onlineServiceSchedulingURL": safe_str(dealer.get("onlineServiceSchedulingURL")),
+        "ossDealerid": safe_str(dealer.get("ossDealerid")),
+        "osspilotflag": safe_str(dealer.get("osspilotflag")),
+        "dealerStatus": safe_str(dealer.get("dealerStatus")),
+    }
 
-print("Starting Extraction :-")
+print("Starting Extraction ...")
+
 headers = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                   "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -55,21 +65,26 @@ headers = {
     "Referer": "https://www.jeep.com/",
 }
 
+all_dealers = []
 
-def extract_data(dealers_array):
-    return list(map(format_dealer_data,dealers_array))
-    
-for brand in BRANDS_TO_PROCESS:
-    url=DATA_API.format(brand)
-    print(f"\tExtracting from :- {url}")
-    data=requests.get(url,headers=headers,timeout=None)
-    if data.status_code==200:
-        try:
-            data=data.json()
-            extracted_data=extract_data(data['dealer'])
-            df=pd.DataFrame(extracted_data)
-            df.to_csv(f"{BRAND_CODE_TO_BRAND[brand]}_dealers.csv",index=False)
-        except Exception as e:
-            print("Error occured while extraction :-",e)
-    else:
-        print("Failed data extraction for :-",brand)
+for brand in tqdm(BRANDS_TO_PROCESS, desc="Extracting brands"):
+    url = DATA_API.format(brand)
+    print(f"→ Fetching from: {url}")
+    try:
+        res = requests.get(url, headers=headers, timeout=None)
+        if res.status_code == 200:
+            data = res.json()
+            dealers = data.get("dealer", [])
+            formatted = [format_dealer_data(d, BRAND_CODE_TO_BRAND[brand]) for d in dealers]
+            all_dealers.extend(formatted)
+        else:
+            print(f"Failed for {brand} with status {res.status_code}")
+    except Exception as e:
+        print(f"Error for {brand}: {e}")
+
+df = pd.DataFrame(all_dealers)
+
+csv_path = "all_brands_dealers.csv"
+df.to_csv(csv_path, index=False)
+
+print(f"Data extraction completed! Saved to {csv_path}")
